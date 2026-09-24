@@ -69,7 +69,7 @@ export function calcularREBA(v){
   const coupling=req(v.coupling,"Acoplamiento",0,3);
   const activity=req(v.activity,"Actividad",0,3);
 
-  const neckFinal=Math.min(5,neck+(v.neckTwist?1:0)+(v.neckSideBend?1:0));
+  const neckFinal=Math.min(3,neck+(v.neckTwist?1:0)+(v.neckSideBend?1:0));
   const trunkFinal=Math.min(5,trunk+(v.trunkTwist?1:0)+(v.trunkSideBend?1:0));
   const legIndex=legs-1;
   const neckIndex=neckFinal-1;
