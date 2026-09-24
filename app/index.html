@@ -17,6 +17,7 @@ button.secondary{background:#e9edf2;color:#18212b}.row{display:flex;gap:8px;flex
 .item{border:1px solid #e0e5eb;border-radius:10px;padding:12px;margin-top:9px}
 .badge{display:inline-block;padding:3px 7px;border-radius:999px;font-size:12px;font-weight:700}
 .propuesta{background:#dbeafe}.confirmado{background:#dcfce7}.pendiente{background:#fef3c7}.nd{background:#eee}.seguridad{background:#fee2e2}
+.result{border-left:4px solid #18212b;padding:12px;background:#f8fafc}
 small{color:#5d6975}
 </style>
 </head>
@@ -68,7 +69,7 @@ small{color:#5d6975}
 </section>
 
 <section class="card">
-<h2>5. Métodos potencialmente pertinentes</h2>
+<h2>5. Métodos</h2>
 <p><small>La selección final corresponde al profesional.</small></p>
 <div class="row">
 <label><input type="checkbox" value="RULA" class="metodo"> RULA</label>
@@ -76,6 +77,30 @@ small{color:#5d6975}
 <label><input type="checkbox" value="NIOSH" class="metodo"> NIOSH</label>
 </div>
 <p id="methodSummary"></p>
+<div id="rulaPanel" hidden>
+<hr>
+<h3>RULA — cálculo del módulo</h3>
+<p><small>El módulo usa valores ya confirmados por el profesional. No interpreta la foto ni inventa datos.</small></p>
+<div class="grid">
+<div><label>Grupo A — brazo superior izquierdo</label><select id="rulaUSL"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select></div>
+<div><label>Grupo A — brazo superior derecho</label><select id="rulaUSR"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select></div>
+<div><label>Antebrazo izquierdo</label><select id="rulaFAL"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></div>
+<div><label>Antebrazo derecho</label><select id="rulaFAR"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></div>
+<div><label>Muñeca izquierda</label><select id="rulaWL"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
+<div><label>Muñeca derecha</label><select id="rulaWR"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
+<div><label>Giro muñeca izquierda</label><select id="rulaWPL"><option value="1">1</option><option value="2">2</option></select></div>
+<div><label>Giro muñeca derecha</label><select id="rulaWPR"><option value="1">1</option><option value="2">2</option></select></div>
+<div><label>Cuello</label><select id="rulaNeck"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select></div>
+<div><label>Tronco</label><select id="rulaTrunk"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select></div>
+<div><label>Piernas</label><select id="rulaLegs"><option value="1">1</option><option value="2">2</option></select></div>
+<div><label>Muscle use A</label><select id="rulaMuscleA"><option value="0">0</option><option value="1">1</option></select></div>
+<div><label>Muscle use B</label><select id="rulaMuscleB"><option value="0">0</option><option value="1">1</option></select></div>
+<div><label>Force/load A</label><select id="rulaForceA"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
+<div><label>Force/load B</label><select id="rulaForceB"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
+</div>
+<button onclick="calculateRula()">Calcular RULA</button>
+<div id="rulaResult"></div>
+</div>
 </section>
 
 <section class="card">
@@ -85,8 +110,11 @@ small{color:#5d6975}
 <button onclick="exportCase()">Exportar JSON</button>
 </section>
 </main>
-<script>
-const state={caso:'',tarea:'',contexto:'',evidencias:[],factores:[],datos:[]};
+
+<script type="module">
+import { calcularRULA, crearSnapshot } from './modules/rula.js';
+
+const state={caso:'',tarea:'',contexto:'',evidencias:[],factores:[],datos:[],resultados:[]};
 const $=id=>document.getElementById(id);
 function badge(s){let c=s.includes('CONFIRMADO')?'confirmado':s.includes('PENDIENTE')?'pendiente':s.includes('NO DETERMINABLE')?'nd':s.includes('SEGURIDAD')?'seguridad':'propuesta';return '<span class="badge '+c+'">'+s+'</span>'}
 function addEvidence(){const d=$('evDesc').value.trim();if(!d)return;state.evidencias.push({id:crypto.randomUUID(),descripcion:d,tipo:$('evTipo').value,fecha:new Date().toISOString()});$('evDesc').value='';render()}
@@ -96,12 +124,33 @@ function render(){
  $('evidenceList').innerHTML=state.evidencias.map(e=>'<div class="item"><b>'+e.descripcion+'</b> · '+e.tipo+'</div>').join('');
  $('factorList').innerHTML=state.factores.map(f=>'<div class="item">'+badge(f.estado)+' '+f.descripcion+'</div>').join('');
  $('dataList').innerHTML=state.datos.map(d=>'<div class="item">'+badge('CONFIRMADO POR PROFESIONAL')+' <b>'+d.nombre+'</b>: '+d.valor+' '+d.unidad+' <small>('+d.origen+')</small></div>').join('');
- const ms=[...document.querySelectorAll('.metodo:checked')].map(x=>x.value);$('methodSummary').textContent=ms.length?'Seleccionados por el profesional: '+ms.join(', '):'Todavía no hay métodos seleccionados.';
- $('summary').innerHTML='<p><b>Evidencias:</b> '+state.evidencias.length+' · <b>Factores:</b> '+state.factores.length+' · <b>Datos confirmados:</b> '+state.datos.length+'</p>';
+ const ms=[...document.querySelectorAll('.metodo:checked')].map(x=>x.value);
+ $('methodSummary').textContent=ms.length?'Seleccionados por el profesional: '+ms.join(', '):'Todavía no hay métodos seleccionados.';
+ $('rulaPanel').hidden=!ms.includes('RULA');
+ $('summary').innerHTML='<p><b>Evidencias:</b> '+state.evidencias.length+' · <b>Factores:</b> '+state.factores.length+' · <b>Datos confirmados:</b> '+state.datos.length+' · <b>Resultados:</b> '+state.resultados.length+'</p>';
 }
+function val(id){return Number($(id).value)}
+window.calculateRula=()=>{
+ const entrada={
+  usLeft:val('rulaUSL'),usRight:val('rulaUSR'),
+  faLeft:val('rulaFAL'),faRight:val('rulaFAR'),
+  wristLeft:val('rulaWL'),wristRight:val('rulaWR'),
+  wristPosLeft:val('rulaWPL'),wristPosRight:val('rulaWPR'),
+  neck:val('rulaNeck'),trunk:val('rulaTrunk'),legs:val('rulaLegs'),
+  muscleA:val('rulaMuscleA'),muscleB:val('rulaMuscleB'),
+  forceA:val('rulaForceA'),forceB:val('rulaForceB')
+ };
+ try{
+  const resultado=calcularRULA(entrada);
+  const snapshot=crearSnapshot(entrada,resultado,{caso_id:state.caso||null,tarea:state.tarea||null});
+  state.resultados.push(snapshot);
+  $('rulaResult').innerHTML='<div class="result"><b>RULA: '+resultado.valorPrincipal+'/7</b><br>Nivel de acción: '+resultado.nivelAccion+'<br>'+resultado.interpretacion+'<br><small>Resultado guardado como snapshot independiente.</small></div>';
+  render();
+ }catch(e){$('rulaResult').innerHTML='<div class="item">'+e.message+'</div>'}
+};
 document.querySelectorAll('.metodo').forEach(x=>x.addEventListener('change',render));
-function save(){state.caso=$('caso').value;state.tarea=$('tarea').value;state.contexto=$('contexto').value;localStorage.setItem('ergonomia_multimetodo_mvp',JSON.stringify(state));alert('Caso guardado en este navegador.')}
-function exportCase(){state.caso=$('caso').value;state.tarea=$('tarea').value;state.contexto=$('contexto').value;const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='caso-ergonomia.json';a.click();URL.revokeObjectURL(a.href)}
+window.save=()=>{state.caso=$('caso').value;state.tarea=$('tarea').value;state.contexto=$('contexto').value;localStorage.setItem('ergonomia_multimetodo_mvp',JSON.stringify(state));alert('Caso guardado en este navegador.')};
+window.exportCase=()=>{state.caso=$('caso').value;state.tarea=$('tarea').value;state.contexto=$('contexto').value;const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='caso-ergonomia.json';a.click();URL.revokeObjectURL(a.href)};
 (()=>{const x=localStorage.getItem('ergonomia_multimetodo_mvp');if(x)Object.assign(state,JSON.parse(x));$('caso').value=state.caso;$('tarea').value=state.tarea;$('contexto').value=state.contexto;render()})();
 </script>
 </body>
