@@ -43,6 +43,7 @@ small{color:#5d6975}
 </div>
 <button id="addEvidenceBtn">Agregar evidencia</button>
 <div id="evidenceList"></div>
+<div id="preliminar" class="preliminar" hidden></div>
 <div class="next-step">
 <strong>¿Ya cargaste las evidencias principales?</strong>
 <small>No hace falta elegir todavía RULA, REBA ni NIOSH. Primero vemos qué muestra la tarea.</small><br><br>
@@ -174,6 +175,24 @@ opts('rulaUAL',6);opts('rulaUAR',6);opts('rulaFAL',4);opts('rulaFAR',4);opts('ru
 opts('rebaNeck',3);opts('rebaTrunk',5);opts('rebaLegs',3);opts('rebaUpper',6);opts('rebaLower',2);opts('rebaWrist',3);opts('rebaForce',3,0);opts('rebaCoupling',3,0);opts('rebaActivity',3,0);$('factor886').innerHTML=PROTOCOLO_886.map(f=>'<option value="'+f.codigo+'">'+f.codigo+' — '+f.nombre+'</option>').join('');
 
 function badge(s){let c=s.includes('CONFIRMADO')?'confirmado':s.includes('PENDIENTE')?'pendiente':s.includes('NO DETERMINABLE')?'nd':s.includes('SEGURIDAD')?'seguridad':'propuesta';return '<span class="badge '+c+'">'+s+'</span>'}
+function renderInformePreliminar(){
+ const box=$('preliminar');
+ if(!state.evidencias.length){box.hidden=true;box.innerHTML='';return}
+ const textos=state.evidencias.map(e=>e.descripcion).filter(Boolean).join(' · ');
+ const hayPostura=/cuclillas|agacha|agach|arrodill|inclina|inclinado|flexion|postura|alcance|brazo|muñeca|espalda|rodilla/i.test(textos);
+ const hayDolor=/dolor|molestia|molesto/i.test(textos);
+ const posibles=hayPostura
+  ? ['Posturas forzadas o mantenidas — confirmar con el profesional.','Revisar exigencia de tronco y miembros inferiores según la secuencia observada.']
+  : ['Revisar postura, fuerza, repetición y duración de la tarea a partir de la secuencia de evidencias.'];
+ if(hayDolor) posibles.push('Hay una manifestación de molestia/dolor: registrarla como manifestación, sin convertirla automáticamente en diagnóstico ni dato de cálculo.');
+ box.hidden=false;
+ box.innerHTML='<h3>Informe preliminar</h3><small><b>Orientación inicial.</b> No es todavía una evaluación ergonómica ni un resultado de método.</small>'+
+ '<p><b>Evidencias cargadas:</b> '+state.evidencias.length+'</p>'+
+ '<p><b>Aspectos a revisar:</b></p><ul>'+posibles.map(x=>'<li>'+x+'</li>').join('')+'</ul>'+
+ '<p><b>Métodos potencialmente pertinentes:</b> RULA y/o REBA si se confirman posturas relevantes. NIOSH solo si existe levantamiento y se cumplen sus condiciones de aplicabilidad.</p>'+
+ '<p><b>Datos que habrá que confirmar:</b> duración, frecuencia/repetición, fuerza/carga y ángulos cuando corresponda.</p>'+
+ '<small>En este MVP todavía no hay visión IA conectada; no se simula que la aplicación haya medido o interpretado automáticamente las imágenes.</small>';
+}
 function render(){
  $('startAnalysisBtn').disabled=state.evidencias.length===0;
  $('startAnalysisBtn').style.opacity=state.evidencias.length===0?'0.55':'1';
@@ -186,6 +205,7 @@ function render(){
    const archivo=e.archivoNombre ? '<small>Archivo: '+e.archivoNombre+' · '+Math.round((e.archivoSize||0)/1024)+' KB</small>' : '<small>Sin archivo adjunto</small>';
    return '<div class="item"><b>'+e.descripcion+'</b> · '+e.tipo+'<br>'+archivo+media+'</div>';
  }).join('');
+ renderInformePreliminar();
  $('obsList').innerHTML=state.observaciones.map(x=>'<div class="item">'+badge(x.estado)+' '+x.descripcion+'</div>').join('');
  $('manifList').innerHTML=state.manifestaciones.map(x=>'<div class="item"><b>Manifestación:</b> '+x.text+' <small>'+x.contexto+'</small></div>').join('');
  $('dudaList').innerHTML=state.dudas.map(x=>'<div class="item">'+badge('PENDIENTE')+' '+x.text+' <small>'+x.evidencia+'</small></div>').join('');
