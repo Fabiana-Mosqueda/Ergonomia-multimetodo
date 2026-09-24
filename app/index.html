@@ -39,6 +39,7 @@ small{color:#5d6975}
 <div class="grid">
 <div><label>Descripción</label><input id="evDesc" placeholder="Ej. E1 — inicio del desplazamiento"></div>
 <div><label>Tipo</label><select id="evTipo"><option>Fotografía</option><option>Video</option><option>Documento</option><option>Otra</option></select></div>
+<div><label>Archivo</label><input id="evFile" type="file" accept="image/*,video/*,.pdf,.doc,.docx"></div>
 </div>
 <button id="addEvidenceBtn">Agregar evidencia</button>
 <div id="evidenceList"></div>
@@ -169,7 +170,11 @@ opts('rebaNeck',3);opts('rebaTrunk',5);opts('rebaLegs',3);opts('rebaUpper',6);op
 
 function badge(s){let c=s.includes('CONFIRMADO')?'confirmado':s.includes('PENDIENTE')?'pendiente':s.includes('NO DETERMINABLE')?'nd':s.includes('SEGURIDAD')?'seguridad':'propuesta';return '<span class="badge '+c+'">'+s+'</span>'}
 function render(){
- $('evidenceList').innerHTML=state.evidencias.map(e=>'<div class="item"><b>'+e.descripcion+'</b> · '+e.tipo+'</div>').join('');
+ $('evidenceList').innerHTML=state.evidencias.map(e=>{
+   const media=e.previewUrl ? (e.mime && e.mime.startsWith('video/') ? '<video controls style="max-width:100%;max-height:260px;margin-top:8px" src="'+e.previewUrl+'"></video>' : e.mime && e.mime.startsWith('image/') ? '<img style="max-width:100%;max-height:260px;margin-top:8px;border-radius:8px" src="'+e.previewUrl+'" alt="Evidencia">' : '') : '';
+   const archivo=e.archivoNombre ? '<small>Archivo: '+e.archivoNombre+' · '+Math.round((e.archivoSize||0)/1024)+' KB</small>' : '<small>Sin archivo adjunto</small>';
+   return '<div class="item"><b>'+e.descripcion+'</b> · '+e.tipo+'<br>'+archivo+media+'</div>';
+ }).join('');
  $('obsList').innerHTML=state.observaciones.map(x=>'<div class="item">'+badge(x.estado)+' '+x.descripcion+'</div>').join('');
  $('manifList').innerHTML=state.manifestaciones.map(x=>'<div class="item"><b>Manifestación:</b> '+x.text+' <small>'+x.contexto+'</small></div>').join('');
  $('dudaList').innerHTML=state.dudas.map(x=>'<div class="item">'+badge('PENDIENTE')+' '+x.text+' <small>'+x.evidencia+'</small></div>').join('');
@@ -184,8 +189,17 @@ function render(){
  $('summary').innerHTML='<p><b>Evidencias:</b> '+state.evidencias.length+' · <b>Factores:</b> '+state.factores.length+' · <b>Datos:</b> '+state.datos.length+' · <b>Resultados:</b> '+state.resultados.length+'</p>';
 }
 function val(id){return Number($(id).value)}
-function addEvidence(){const d=$('evDesc').value.trim();if(!d)return;state.evidencias.push({id:crypto.randomUUID(),descripcion:d,tipo:$('evTipo').value,fecha:new Date().toISOString()});$('evDesc').value='';render()}
-function addFactor(){const d=$('factorDesc').value.trim();if(!d)return;state.factores.push({id:crypto.randomUUID(),descripcion:d,estado:$('factorState').value,fecha:new Date().toISOString()});$('factorDesc').value='';render()}
+function addEvidence(){
+ const d=$('evDesc').value.trim();
+ const file=$('evFile').files[0];
+ if(!d){alert('Agregá una descripción de la evidencia.');return}
+ const e={id:crypto.randomUUID(),descripcion:d,tipo:$('evTipo').value,fecha:new Date().toISOString(),archivoNombre:file?file.name:'',mime:file?file.type:'',archivoSize:file?file.size:0,previewUrl:file?URL.createObjectURL(file):''};
+ state.evidencias.push(e);
+ $('evDesc').value='';
+ $('evFile').value='';
+ render();
+}
+function addFactor(){const f=PROTOCOLO_886.find(x=>x.codigo===$('factor886').value);if(!f)return;state.factores.push({...f,id:crypto.randomUUID(),estado:$('factorState').value,fecha:new Date().toISOString()});render()}
 function addDato(){const n=$('datoNombre').value.trim(),v=$('datoValor').value.trim(),u=$('datoUnidad').value.trim();if(!n||!v)return;state.datos.push({id:crypto.randomUUID(),nombre:n,valor:v,unidad:u,origen:$('datoOrigen').value,confirmado:true,fecha:new Date().toISOString()});['datoNombre','datoValor','datoUnidad'].forEach(x=>$(x).value='');render()}
 $('addEvidenceBtn').onclick=addEvidence;
 $('addObsBtn').onclick=()=>{const d=$('obsDesc').value.trim();if(!d)return;state.observaciones.push({id:crypto.randomUUID(),descripcion:d,estado:$('obsState').value,fecha:new Date().toISOString()});$('obsDesc').value='';render()};
