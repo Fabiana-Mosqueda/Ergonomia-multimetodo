@@ -19,6 +19,8 @@ button.secondary{background:#e9edf2;color:#18212b}.row{display:flex;gap:8px;flex
 .propuesta{background:#dbeafe}.confirmado{background:#dcfce7}.pendiente{background:#fef3c7}.nd{background:#eee}.seguridad{background:#fee2e2}
 .result{border-left:4px solid #18212b;padding:12px;background:#f8fafc}
 small{color:#5d6975}
+.ai-box{border:1px solid #cbd5e1;border-radius:12px;padding:14px;margin-top:14px;background:#f8fafc}
+.ai-status{margin-top:8px;font-size:14px}
 </style>
 </head>
 <body>
@@ -44,6 +46,16 @@ small{color:#5d6975}
 <button id="addEvidenceBtn">Agregar evidencia</button>
 <div id="evidenceList"></div>
 <div id="preliminar" class="preliminar" hidden></div>
+<div class="ai-box">
+<strong>Asistencia de IA visual</strong>
+<p><small>La IA analiza las evidencias y propone observaciones, factores y métodos potencialmente pertinentes. No mide ni decide.</small></p>
+<label>Clave Gemini para esta sesión</label>
+<input id="geminiKey" type="password" autocomplete="off" placeholder="Pegá tu clave aquí (no se guarda en GitHub)">
+<div class="row" style="margin-top:10px">
+<button id="analyzeAiBtn" type="button">Analizar evidencias con IA</button>
+</div>
+<div id="aiStatus" class="ai-status"></div>
+</div>
 <div class="next-step">
 <strong>¿Ya cargaste las evidencias principales?</strong>
 <small>No hace falta elegir todavía RULA, REBA ni NIOSH. Primero vemos qué muestra la tarea.</small><br><br>
@@ -168,7 +180,8 @@ import {calcularREBA,crearSnapshot as snapshotREBA} from './modules/reba.js';
 import {calcularNIOSH,crearSnapshot as snapshotNIOSH} from './modules/niosh.js';
 import {PROTOCOLO_886} from './modules/protocolo886.js';
 
-const state={caso:'',tarea:'',contexto:'',evidencias:[],observaciones:[],manifestaciones:[],dudas:[],factores:[],seguridad:[],datos:[],resultados:[],analisisIniciado:false};
+const state={caso:'',tarea:'',contexto:'',evidencias:[],observaciones:[],manifestaciones:[],dudas:[],factores:[],seguridad:[],datos:[],resultados:[],analisisIniciado:false,aiAnalysis:null};
+let aiImageCache=new Map();
 const $=id=>document.getElementById(id);
 const opts=(id,max,min=1)=>{$(id).innerHTML=Array.from({length:max-min+1},(_,i)=>'<option value="'+(i+min)+'">'+(i+min)+'</option>').join('')};
 opts('rulaUAL',6);opts('rulaUAR',6);opts('rulaFAL',4);opts('rulaFAR',4);opts('rulaWL',3);opts('rulaWAR',3);opts('rulaWTL',2);opts('rulaWTR',2);opts('rulaNeck',6);opts('rulaTrunk',6);opts('rulaLegs',2);opts('rulaMAL',1,0);opts('rulaMAR',1,0);opts('rulaMB',1,0);opts('rulaFALoad',3,0);opts('rulaFARLoad',3,0);opts('rulaFB',3,0);
@@ -178,20 +191,23 @@ function badge(s){let c=s.includes('CONFIRMADO')?'confirmado':s.includes('PENDIE
 function renderInformePreliminar(){
  const box=$('preliminar');
  if(!state.evidencias.length){box.hidden=true;box.innerHTML='';return}
- const textos=state.evidencias.map(e=>e.descripcion).filter(Boolean).join(' · ');
- const hayPostura=/cuclillas|agacha|agach|arrodill|inclina|inclinado|flexion|postura|alcance|brazo|muñeca|espalda|rodilla/i.test(textos);
- const hayDolor=/dolor|molestia|molesto/i.test(textos);
- const posibles=hayPostura
-  ? ['Posturas forzadas o mantenidas — confirmar con el profesional.','Revisar exigencia de tronco y miembros inferiores según la secuencia observada.']
-  : ['Revisar postura, fuerza, repetición y duración de la tarea a partir de la secuencia de evidencias.'];
- if(hayDolor) posibles.push('Hay una manifestación de molestia/dolor: registrarla como manifestación, sin convertirla automáticamente en diagnóstico ni dato de cálculo.');
+ if(state.aiAnalysis){
+   const a=state.aiAnalysis;
+   const obs=(a.observaciones||[]).map(o=>'<li><b>'+o.estado+'</b> — '+o.texto+'</li>').join('');
+   const fac=(a.factores||[]).map(f=>'<li><b>'+f.codigo+' · PROPUESTA IA</b> — '+f.texto+'</li>').join('');
+   const met=(a.metodos||[]).map(m=>'<li><b>'+m.metodo+'</b> — '+m.motivo+'</li>').join('');
+   const dat=(a.datos_por_confirmar||[]).map(x=>'<li>'+x+'</li>').join('');
+   box.hidden=false;
+   box.innerHTML='<h3>Informe preliminar asistido por IA</h3><small><b>Propuesta inicial, no evaluación definitiva.</b> Todo hallazgo debe ser validado por el profesional.</small>'+
+   '<p><b>Resumen:</b> '+(a.resumen||'Sin resumen.')+'</p>'+
+   '<p><b>Observaciones propuestas</b></p><ul>'+(obs||'<li>No se propusieron observaciones.</li>')+'</ul>'+
+   '<p><b>Factores 886 propuestos</b></p><ul>'+(fac||'<li>No se propusieron factores.</li>')+'</ul>'+
+   '<p><b>Métodos potencialmente pertinentes</b></p><ul>'+(met||'<li>Ninguno propuesto.</li>')+'</ul>'+
+   '<p><b>Datos a confirmar</b></p><ul>'+(dat||'<li>Ninguno indicado.</li>')+'</ul>';
+   return;
+ }
  box.hidden=false;
- box.innerHTML='<h3>Informe preliminar</h3><small><b>Orientación inicial.</b> No es todavía una evaluación ergonómica ni un resultado de método.</small>'+
- '<p><b>Evidencias cargadas:</b> '+state.evidencias.length+'</p>'+
- '<p><b>Aspectos a revisar:</b></p><ul>'+posibles.map(x=>'<li>'+x+'</li>').join('')+'</ul>'+
- '<p><b>Métodos potencialmente pertinentes:</b> RULA y/o REBA si se confirman posturas relevantes. NIOSH solo si existe levantamiento y se cumplen sus condiciones de aplicabilidad.</p>'+
- '<p><b>Datos que habrá que confirmar:</b> duración, frecuencia/repetición, fuerza/carga y ángulos cuando corresponda.</p>'+
- '<small>En este MVP todavía no hay visión IA conectada; no se simula que la aplicación haya medido o interpretado automáticamente las imágenes.</small>';
+ box.innerHTML='<h3>Informe preliminar</h3><small>Cargaste '+state.evidencias.length+' evidencia(s). Ejecutá la asistencia de IA para generar propuestas visuales.</small>';
 }
 function render(){
  $('startAnalysisBtn').disabled=state.evidencias.length===0;
@@ -220,13 +236,14 @@ function render(){
  $('summary').innerHTML='<p><b>Evidencias:</b> '+state.evidencias.length+' · <b>Factores:</b> '+state.factores.length+' · <b>Datos:</b> '+state.datos.length+' · <b>Resultados:</b> '+state.resultados.length+'</p>';
 }
 function val(id){return Number($(id).value)}
-function addEvidence(){
+async function addEvidence(){
  const d=$('evDesc').value.trim();
  const files=Array.from($('evFile').files);
  if(!files.length){alert('Primero seleccioná al menos una foto, video o archivo.');return}
- files.forEach((file,i)=>{
-   state.evidencias.push({
-     id:crypto.randomUUID(),
+ for(const file of files){
+   const id=crypto.randomUUID();
+   const e={
+     id,
      descripcion:d ? (files.length===1 ? d : d+' — E'+(state.evidencias.length+1)) : 'Evidencia '+(state.evidencias.length+1),
      tipo:$('evTipo').value,
      fecha:new Date().toISOString(),
@@ -234,8 +251,15 @@ function addEvidence(){
      mime:file.type,
      archivoSize:file.size,
      previewUrl:file.type && (file.type.startsWith('image/') || file.type.startsWith('video/')) ? URL.createObjectURL(file) : ''
-   });
- });
+   };
+   state.evidencias.push(e);
+   if(file.type.startsWith('image/')){
+     const dataUrl=await new Promise((resolve,reject)=>{
+       const fr=new FileReader(); fr.onload=()=>resolve(fr.result); fr.onerror=reject; fr.readAsDataURL(file);
+     });
+     aiImageCache.set(id,{dataUrl,mime:file.type});
+   }
+ }
  $('evDesc').value='';
  $('evFile').value='';
  render();
@@ -243,6 +267,67 @@ function addEvidence(){
 function addFactor(){const f=PROTOCOLO_886.find(x=>x.codigo===$('factor886').value);if(!f)return;state.factores.push({...f,id:crypto.randomUUID(),estado:$('factorState').value,fecha:new Date().toISOString()});render()}
 function addDato(){const n=$('datoNombre').value.trim(),v=$('datoValor').value.trim(),u=$('datoUnidad').value.trim();if(!n||!v)return;state.datos.push({id:crypto.randomUUID(),nombre:n,valor:v,unidad:u,origen:$('datoOrigen').value,confirmado:true,fecha:new Date().toISOString()});['datoNombre','datoValor','datoUnidad'].forEach(x=>$(x).value='');render()}
 $('addEvidenceBtn').onclick=addEvidence;
+async function analizarConIA(){
+ const key=$('geminiKey').value.trim();
+ if(!key){$('aiStatus').textContent='Falta la clave Gemini para ejecutar el análisis.';return}
+ const imgs=state.evidencias.map(e=>aiImageCache.get(e.id)).filter(Boolean).slice(0,12);
+ if(!imgs.length){$('aiStatus').textContent='No hay imágenes disponibles para analizar en esta sesión.';return}
+ $('aiStatus').textContent='Analizando '+imgs.length+' evidencia(s)…';
+ const prompt=`
+Sos un asistente de análisis ergonómico visual. Analizá las imágenes como EVIDENCIA, no como medición.
+Caso: ${state.caso||'sin nombre'}
+Tarea: ${state.tarea||'sin especificar'}
+Contexto: ${state.contexto||'sin especificar'}
+
+Reglas obligatorias:
+- Proponé, nunca confirmes ni decidas.
+- No inventes peso, fuerza, duración, frecuencia, ángulos precisos, diagnóstico, edad, capacidad física ni sexo.
+- Diferenciá OBSERVADO, ESTIMADO y NO_DETERMINABLE.
+- Si algo no puede determinarse por imagen, indicá NO_DETERMINABLE.
+- Identificá factores potenciales de Res. SRT 886/2015 por código A-I solo cuando haya evidencia visual razonable; estado siempre PROPUESTA IA.
+- Seguridad es una dimensión separada de ergonomía.
+- Sugerí RULA/REBA/NIOSH solo como potencialmente pertinentes. NIOSH únicamente si podría existir levantamiento y luego deben verificarse sus condiciones de aplicabilidad.
+- No calcules ningún método.
+- No conviertas manifestaciones de dolor en diagnóstico.
+- No confundas el peso corporal de la persona con peso de una carga.
+
+Respondé SOLO JSON con esta estructura:
+{
+ "resumen":"...",
+ "observaciones":[{"texto":"...","estado":"OBSERVADO|ESTIMADO|NO_DETERMINABLE","evidencias":["E1"]}],
+ "factores":[{"codigo":"A","texto":"...","estado":"PROPUESTA IA","evidencias":["E1"]}],
+ "seguridad":[{"texto":"...","estado":"ALERTA DE SEGURIDAD|NO_DETERMINABLE","evidencias":["E1"]}],
+ "metodos":[{"metodo":"RULA|REBA|NIOSH","motivo":"..."}],
+ "datos_por_confirmar":["..."]
+}
+`;
+ const contents=[{text:prompt}];
+ imgs.forEach(x=>contents.push({inline_data:{mime_type:x.mime,data:x.dataUrl.split(',')[1]}}));
+ try{
+   const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',{
+     method:'POST',
+     headers:{'Content-Type':'application/json','x-goog-api-key':key},
+     body:JSON.stringify({
+       contents:[{role:'user',parts:contents}],
+       generationConfig:{responseMimeType:'application/json'}
+     })
+   });
+   if(!resp.ok) throw new Error('Gemini respondió HTTP '+resp.status);
+   const data=await resp.json();
+   const raw=data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('')||'';
+   const result=JSON.parse(raw);
+   state.aiAnalysis=result;
+   state.observaciones=(result.observaciones||[]).map(o=>({id:crypto.randomUUID(),descripcion:o.texto,estado:o.estado,fecha:new Date().toISOString(),origen:'IA_VISUAL',evidencias:o.evidencias||[]}));
+   state.factores=(result.factores||[]).map(f=>{const cat=PROTOCOLO_886.find(x=>x.codigo===f.codigo)||{};return {...cat,id:crypto.randomUUID(),codigo:f.codigo,descripcion:f.texto,estado:'PROPUESTA IA',fecha:new Date().toISOString(),origen:'IA_VISUAL',evidencias:f.evidencias||[]};});
+   state.seguridad=(result.seguridad||[]).map(s=>({id:crypto.randomUUID(),descripcion:s.texto,estado:s.estado,fecha:new Date().toISOString(),origen:'IA_VISUAL',evidencias:s.evidencias||[]}));
+   $('aiStatus').textContent='Análisis recibido. Las propuestas quedaron pendientes de validación profesional.';
+   render();
+   document.querySelector('.guided-analysis')?.scrollIntoView({behavior:'smooth',block:'start'});
+ }catch(err){
+   $('aiStatus').textContent='No se pudo analizar: '+err.message;
+ }
+}
+$('analyzeAiBtn').onclick=analizarConIA;
 $('startAnalysisBtn').onclick=()=>{
  if(state.evidencias.length===0){alert('Primero cargá al menos una evidencia.');return}
  state.analisisIniciado=true;
