@@ -40,7 +40,7 @@ small{color:#5d6975}
 <div><label>Descripción</label><input id="evDesc" placeholder="Ej. E1 — inicio del desplazamiento"></div>
 <div><label>Tipo</label><select id="evTipo"><option>Fotografía</option><option>Video</option><option>Documento</option><option>Otra</option></select></div>
 </div>
-<button onclick="addEvidence()">Agregar evidencia</button>
+<button id="addEvidenceBtn">Agregar evidencia</button>
 <div id="evidenceList"></div>
 </section>
 
@@ -51,7 +51,7 @@ small{color:#5d6975}
 <div><label>Observación / factor propuesto</label><input id="factorDesc" placeholder="Ej. Brazo por encima de hombros"></div>
 <div><label>Estado profesional</label><select id="factorState"><option value="PROPUESTA IA">Propuesta IA</option><option value="CONFIRMADO POR PROFESIONAL">Confirmado por profesional</option><option value="RECHAZADO">Rechazado</option><option value="NO DETERMINABLE">No determinable</option></select></div>
 </div>
-<button onclick="addFactor()">Agregar</button>
+<button id="addFactorBtn">Agregar</button>
 <div id="factorList"></div>
 </section>
 
@@ -64,7 +64,7 @@ small{color:#5d6975}
 <div><label>Unidad</label><input id="datoUnidad" placeholder="kg"></div>
 <div><label>Origen</label><select id="datoOrigen"><option>MEDICION_INSTRUMENTAL</option><option>OBSERVACION_CONFIRMADA</option><option>DOCUMENTACION</option><option>MANIFESTACION_A_VERIFICAR</option></select></div>
 </div>
-<button onclick="addDato()">Confirmar dato</button>
+<button id="addDatoBtn">Confirmar dato</button>
 <div id="dataList"></div>
 </section>
 
