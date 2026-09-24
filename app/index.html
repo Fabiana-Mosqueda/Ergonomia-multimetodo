@@ -43,9 +43,14 @@ small{color:#5d6975}
 </div>
 <button id="addEvidenceBtn">Agregar evidencia</button>
 <div id="evidenceList"></div>
+<div class="next-step">
+<strong>¿Ya cargaste las evidencias principales?</strong>
+<small>No hace falta elegir todavía RULA, REBA ni NIOSH. Primero vemos qué muestra la tarea.</small><br><br>
+<button id="startAnalysisBtn">Continuar con el análisis</button>
+</div>
 </section>
 
-<section class="card">
+<section class="card guided-analysis">
 <h2>3. Observaciones, manifestaciones y dudas</h2>
 <p><small>La observación puede ser observada, estimada o no determinable. Una manifestación del trabajador no se convierte directamente en un dato de cálculo.</small></p>
 <div class="grid">
@@ -67,7 +72,7 @@ small{color:#5d6975}
 <button id="addDudaBtn">Registrar duda</button><div id="dudaList"></div>
 </section>
 
-<section class="card">
+<section class="card guided-analysis">
 <h2>4. Factores de riesgo — Res. SRT 886/2015</h2>
 <p><small>La Planilla 1 identifica A–I. La confirmación, modificación o rechazo queda en manos del profesional.</small></p>
 <div class="grid">
@@ -77,7 +82,7 @@ small{color:#5d6975}
 <button id="addFactorBtn">Agregar factor</button><div id="factorList"></div><p id="suggestions"><small>Las sugerencias de método son orientativas.</small></p>
 </section>
 
-<section class="card">
+<section class="card guided-analysis">
 <h2>5. Condiciones de seguridad</h2>
 <p><small>Se mantienen separadas de los factores ergonómicos y de sus cálculos.</small></p>
 <div class="grid">
@@ -86,7 +91,7 @@ small{color:#5d6975}
 </div>
 <button id="addSegBtn">Agregar condición</button><div id="segList"></div>
 </section>
-<section class="card">
+<section class="card guided-method">
 <h2>6. Datos confirmados</h2>
 <p><small>Solo datos confirmados alimentan cálculos. La fuente puede ser observación, medición instrumental o documentación.</small></p>
 <div class="grid">
@@ -99,7 +104,7 @@ small{color:#5d6975}
 <div id="dataList"></div>
 </section>
 
-<section class="card">
+<section class="card guided-method">
 <h2>7. Métodos y motor de aplicabilidad</h2>
 <p><small>La selección final corresponde al profesional.</small></p>
 <div class="row">
@@ -147,7 +152,7 @@ small{color:#5d6975}
 </div>
 </section>
 
-<section class="card">
+<section class="card guided-result">
 <h2>8. Estado del caso</h2>
 <div id="resultsList"></div>
 <div id="summary"></div>
@@ -162,7 +167,7 @@ import {calcularREBA,crearSnapshot as snapshotREBA} from './modules/reba.js';
 import {calcularNIOSH,crearSnapshot as snapshotNIOSH} from './modules/niosh.js';
 import {PROTOCOLO_886} from './modules/protocolo886.js';
 
-const state={caso:'',tarea:'',contexto:'',evidencias:[],observaciones:[],manifestaciones:[],dudas:[],factores:[],seguridad:[],datos:[],resultados:[]};
+const state={caso:'',tarea:'',contexto:'',evidencias:[],observaciones:[],manifestaciones:[],dudas:[],factores:[],seguridad:[],datos:[],resultados:[],analisisIniciado:false};
 const $=id=>document.getElementById(id);
 const opts=(id,max,min=1)=>{$(id).innerHTML=Array.from({length:max-min+1},(_,i)=>'<option value="'+(i+min)+'">'+(i+min)+'</option>').join('')};
 opts('rulaUAL',6);opts('rulaUAR',6);opts('rulaFAL',4);opts('rulaFAR',4);opts('rulaWL',3);opts('rulaWAR',3);opts('rulaWTL',2);opts('rulaWTR',2);opts('rulaNeck',6);opts('rulaTrunk',6);opts('rulaLegs',2);opts('rulaMAL',1,0);opts('rulaMAR',1,0);opts('rulaMB',1,0);opts('rulaFALoad',3,0);opts('rulaFARLoad',3,0);opts('rulaFB',3,0);
@@ -170,6 +175,10 @@ opts('rebaNeck',3);opts('rebaTrunk',5);opts('rebaLegs',3);opts('rebaUpper',6);op
 
 function badge(s){let c=s.includes('CONFIRMADO')?'confirmado':s.includes('PENDIENTE')?'pendiente':s.includes('NO DETERMINABLE')?'nd':s.includes('SEGURIDAD')?'seguridad':'propuesta';return '<span class="badge '+c+'">'+s+'</span>'}
 function render(){
+ document.querySelectorAll('.guided-analysis').forEach(x=>x.classList.toggle('guided-hidden',!state.analisisIniciado));
+ const factorConfirmado=state.factores.some(f=>f.estado==='CONFIRMADO POR PROFESIONAL');
+ document.querySelectorAll('.guided-method').forEach(x=>x.classList.toggle('guided-hidden',!factorConfirmado));
+ document.querySelectorAll('.guided-result').forEach(x=>x.classList.toggle('guided-hidden',state.resultados.length===0));
  $('evidenceList').innerHTML=state.evidencias.map(e=>{
    const media=e.previewUrl ? (e.mime && e.mime.startsWith('video/') ? '<video controls style="max-width:100%;max-height:260px;margin-top:8px" src="'+e.previewUrl+'"></video>' : e.mime && e.mime.startsWith('image/') ? '<img style="max-width:100%;max-height:260px;margin-top:8px;border-radius:8px" src="'+e.previewUrl+'" alt="Evidencia">' : '') : '';
    const archivo=e.archivoNombre ? '<small>Archivo: '+e.archivoNombre+' · '+Math.round((e.archivoSize||0)/1024)+' KB</small>' : '<small>Sin archivo adjunto</small>';
@@ -202,10 +211,21 @@ function addEvidence(){
 function addFactor(){const f=PROTOCOLO_886.find(x=>x.codigo===$('factor886').value);if(!f)return;state.factores.push({...f,id:crypto.randomUUID(),estado:$('factorState').value,fecha:new Date().toISOString()});render()}
 function addDato(){const n=$('datoNombre').value.trim(),v=$('datoValor').value.trim(),u=$('datoUnidad').value.trim();if(!n||!v)return;state.datos.push({id:crypto.randomUUID(),nombre:n,valor:v,unidad:u,origen:$('datoOrigen').value,confirmado:true,fecha:new Date().toISOString()});['datoNombre','datoValor','datoUnidad'].forEach(x=>$(x).value='');render()}
 $('addEvidenceBtn').onclick=addEvidence;
+$('startAnalysisBtn').onclick=()=>{
+ if(state.evidencias.length===0){alert('Primero cargá al menos una evidencia.');return}
+ state.analisisIniciado=true;
+ render();
+ document.querySelector('.guided-analysis')?.scrollIntoView({behavior:'smooth',block:'start'});
+};
 $('addObsBtn').onclick=()=>{const d=$('obsDesc').value.trim();if(!d)return;state.observaciones.push({id:crypto.randomUUID(),descripcion:d,estado:$('obsState').value,fecha:new Date().toISOString()});$('obsDesc').value='';render()};
 $('addManifBtn').onclick=()=>{const t=$('manif').value.trim();if(!t)return;state.manifestaciones.push({id:crypto.randomUUID(),text:t,contexto:$('manifContext').value.trim(),fecha:new Date().toISOString()});$('manif').value='';$('manifContext').value='';render()};
 $('addDudaBtn').onclick=()=>{const t=$('duda').value.trim();if(!t)return;state.dudas.push({id:crypto.randomUUID(),text:t,evidencia:$('dudaEv').value.trim(),estado:'PENDIENTE',fecha:new Date().toISOString()});$('duda').value='';$('dudaEv').value='';render()};
-$('addFactorBtn').onclick=()=>{const f=PROTOCOLO_886.find(x=>x.codigo===$('factor886').value);state.factores.push({...f,id:crypto.randomUUID(),estado:$('factorState').value,fecha:new Date().toISOString()});render()};
+$('addFactorBtn').onclick=()=>{
+ const f=PROTOCOLO_886.find(x=>x.codigo===$('factor886').value);
+ if(!f)return;
+ state.factores.push({...f,id:crypto.randomUUID(),estado:$('factorState').value,fecha:new Date().toISOString()});
+ render();
+};
 $('addSegBtn').onclick=()=>{const d=$('seguridad').value.trim();if(!d)return;state.seguridad.push({id:crypto.randomUUID(),descripcion:d,estado:$('segState').value,fecha:new Date().toISOString()});$('seguridad').value='';render()};
 $('addDatoBtn').onclick=addDato;
 $('calcRulaBtn').onclick=()=>{try{const e={izq:{ua:val('rulaUAL'),la:val('rulaFAL'),w:val('rulaWL'),wt:val('rulaWTL'),musc:val('rulaMAL'),force:val('rulaFALoad')},der:{ua:val('rulaUAR'),la:val('rulaFAR'),w:val('rulaWAR'),wt:val('rulaWTR'),musc:val('rulaMAR'),force:val('rulaFARLoad')},unico:{neck:val('rulaNeck'),trunk:val('rulaTrunk'),legs:val('rulaLegs'),musc:val('rulaMB'),force:val('rulaFB')}};const x=calcularRULA(e);state.resultados.push(snapshotRULA(e,x,{caso:state.caso,tarea:state.tarea}));$('rulaResult').innerHTML='<div class="result"><b>RULA '+x.valorPrincipal+'/7</b> · nivel de acción '+x.nivelAccion+'<br>'+x.interpretacion.title+' — '+x.interpretacion.desc+'</div>';render()}catch(e){$('rulaResult').innerHTML='<div class="item">'+e.message+'</div>'}};
