@@ -39,7 +39,7 @@ small{color:#5d6975}
 <div class="grid">
 <div><label>Descripción</label><input id="evDesc" placeholder="Ej. E1 — inicio del desplazamiento"></div>
 <div><label>Tipo</label><select id="evTipo"><option>Fotografía</option><option>Video</option><option>Documento</option><option>Otra</option></select></div>
-<div><label>Archivo</label><input id="evFile" type="file" accept="image/*,video/*,.pdf,.doc,.docx"></div>
+<div><label>Archivos</label><input id="evFile" type="file" multiple accept="image/*,video/*,.pdf,.doc,.docx"><small>Podés seleccionar varias fotos juntas.</small></div>
 </div>
 <button id="addEvidenceBtn">Agregar evidencia</button>
 <div id="evidenceList"></div>
@@ -175,6 +175,8 @@ opts('rebaNeck',3);opts('rebaTrunk',5);opts('rebaLegs',3);opts('rebaUpper',6);op
 
 function badge(s){let c=s.includes('CONFIRMADO')?'confirmado':s.includes('PENDIENTE')?'pendiente':s.includes('NO DETERMINABLE')?'nd':s.includes('SEGURIDAD')?'seguridad':'propuesta';return '<span class="badge '+c+'">'+s+'</span>'}
 function render(){
+ $('startAnalysisBtn').disabled=state.evidencias.length===0;
+ $('startAnalysisBtn').style.opacity=state.evidencias.length===0?'0.55':'1';
  document.querySelectorAll('.guided-analysis').forEach(x=>x.classList.toggle('guided-hidden',!state.analisisIniciado));
  const factorConfirmado=state.factores.some(f=>f.estado==='CONFIRMADO POR PROFESIONAL');
  document.querySelectorAll('.guided-method').forEach(x=>x.classList.toggle('guided-hidden',!factorConfirmado));
@@ -200,10 +202,20 @@ function render(){
 function val(id){return Number($(id).value)}
 function addEvidence(){
  const d=$('evDesc').value.trim();
- const file=$('evFile').files[0];
- if(!d){alert('Agregá una descripción de la evidencia.');return}
- const e={id:crypto.randomUUID(),descripcion:d,tipo:$('evTipo').value,fecha:new Date().toISOString(),archivoNombre:file?file.name:'',mime:file?file.type:'',archivoSize:file?file.size:0,previewUrl:file?URL.createObjectURL(file):''};
- state.evidencias.push(e);
+ const files=Array.from($('evFile').files);
+ if(!files.length){alert('Primero seleccioná al menos una foto, video o archivo.');return}
+ files.forEach((file,i)=>{
+   state.evidencias.push({
+     id:crypto.randomUUID(),
+     descripcion:d ? (files.length===1 ? d : d+' — E'+(state.evidencias.length+1)) : 'Evidencia '+(state.evidencias.length+1),
+     tipo:$('evTipo').value,
+     fecha:new Date().toISOString(),
+     archivoNombre:file.name,
+     mime:file.type,
+     archivoSize:file.size,
+     previewUrl:file.type && (file.type.startsWith('image/') || file.type.startsWith('video/')) ? URL.createObjectURL(file) : ''
+   });
+ });
  $('evDesc').value='';
  $('evFile').value='';
  render();
