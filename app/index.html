@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ergonomía Multimétodo — MVP</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#18212b;background:#f5f7fa}
+body{margin:0}.wrap{max-width:1100px;margin:auto;padding:24px}
+header{background:#fff;border-bottom:1px solid #ddd}.brand{font-size:24px;font-weight:700}
+.card{background:#fff;border:1px solid #dfe4ea;border-radius:14px;padding:18px;margin:14px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+label{display:block;font-weight:600;margin:10px 0 5px}input,textarea,select,button{font:inherit}
+input,textarea,select{width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd3dc;border-radius:8px}
+button{border:0;border-radius:8px;padding:9px 13px;cursor:pointer;background:#18212b;color:#fff}
+button.secondary{background:#e9edf2;color:#18212b}.row{display:flex;gap:8px;flex-wrap:wrap}
+.item{border:1px solid #e0e5eb;border-radius:10px;padding:12px;margin-top:9px}
+.badge{display:inline-block;padding:3px 7px;border-radius:999px;font-size:12px;font-weight:700}
+.propuesta{background:#dbeafe}.confirmado{background:#dcfce7}.pendiente{background:#fef3c7}.nd{background:#eee}.seguridad{background:#fee2e2}
+small{color:#5d6975}
+</style>
+</head>
+<body>
+<header><div class="wrap"><div class="brand">Ergonomía Multimétodo</div><small>La IA propone · el algoritmo calcula · el profesional valida</small></div></header>
+<main class="wrap">
+<section class="card">
+<h2>1. Caso y tarea</h2>
+<div class="grid">
+<div><label>Nombre del caso</label><input id="caso" placeholder="Ej. Distribución de alimentos"></div>
+<div><label>Tarea</label><input id="tarea" placeholder="Ej. Traslado de carro"></div>
+</div>
+<label>Contexto</label><textarea id="contexto" rows="3" placeholder="Puesto, jornada, pausas, frecuencia, duración, organización..."></textarea>
+</section>
+
+<section class="card">
+<h2>2. Evidencia</h2>
+<p><small>Una tarea puede tener varias evidencias. La evidencia no es una medición.</small></p>
+<div class="grid">
+<div><label>Descripción</label><input id="evDesc" placeholder="Ej. E1 — inicio del desplazamiento"></div>
+<div><label>Tipo</label><select id="evTipo"><option>Fotografía</option><option>Video</option><option>Documento</option><option>Otra</option></select></div>
+</div>
+<button onclick="addEvidence()">Agregar evidencia</button>
+<div id="evidenceList"></div>
+</section>
+
+<section class="card">
+<h2>3. Observaciones y factores 886</h2>
+<p><small>Las propuestas son orientativas. El profesional confirma, modifica o rechaza.</small></p>
+<div class="grid">
+<div><label>Observación / factor propuesto</label><input id="factorDesc" placeholder="Ej. Brazo por encima de hombros"></div>
+<div><label>Estado profesional</label><select id="factorState"><option value="PROPUESTA IA">Propuesta IA</option><option value="CONFIRMADO POR PROFESIONAL">Confirmado por profesional</option><option value="RECHAZADO">Rechazado</option><option value="NO DETERMINABLE">No determinable</option></select></div>
+</div>
+<button onclick="addFactor()">Agregar</button>
+<div id="factorList"></div>
+</section>
+
+<section class="card">
+<h2>4. Datos confirmados</h2>
+<p><small>Solo datos confirmados alimentan cálculos. La fuente puede ser observación, medición instrumental o documentación.</small></p>
+<div class="grid">
+<div><label>Dato</label><input id="datoNombre" placeholder="Ej. Peso de la carga"></div>
+<div><label>Valor</label><input id="datoValor" placeholder="Ej. 20"></div>
+<div><label>Unidad</label><input id="datoUnidad" placeholder="kg"></div>
+<div><label>Origen</label><select id="datoOrigen"><option>MEDICION_INSTRUMENTAL</option><option>OBSERVACION_CONFIRMADA</option><option>DOCUMENTACION</option><option>MANIFESTACION_A_VERIFICAR</option></select></div>
+</div>
+<button onclick="addDato()">Confirmar dato</button>
+<div id="dataList"></div>
+</section>
+
+<section class="card">
+<h2>5. Métodos potencialmente pertinentes</h2>
+<p><small>La selección final corresponde al profesional.</small></p>
+<div class="row">
+<label><input type="checkbox" value="RULA" class="metodo"> RULA</label>
+<label><input type="checkbox" value="REBA" class="metodo"> REBA</label>
+<label><input type="checkbox" value="NIOSH" class="metodo"> NIOSH</label>
+</div>
+<p id="methodSummary"></p>
+</section>
+
+<section class="card">
+<h2>Estado del caso</h2>
+<div id="summary"></div>
+<button class="secondary" onclick="save()">Guardar caso en este navegador</button>
+<button onclick="exportCase()">Exportar JSON</button>
+</section>
+</main>
+<script>
+const state={caso:'',tarea:'',contexto:'',evidencias:[],factores:[],datos:[]};
+const $=id=>document.getElementById(id);
+function badge(s){let c=s.includes('CONFIRMADO')?'confirmado':s.includes('PENDIENTE')?'pendiente':s.includes('NO DETERMINABLE')?'nd':s.includes('SEGURIDAD')?'seguridad':'propuesta';return '<span class="badge '+c+'">'+s+'</span>'}
+function addEvidence(){const d=$('evDesc').value.trim();if(!d)return;state.evidencias.push({id:crypto.randomUUID(),descripcion:d,tipo:$('evTipo').value,fecha:new Date().toISOString()});$('evDesc').value='';render()}
+function addFactor(){const d=$('factorDesc').value.trim();if(!d)return;state.factores.push({id:crypto.randomUUID(),descripcion:d,estado:$('factorState').value,fecha:new Date().toISOString()});$('factorDesc').value='';render()}
+function addDato(){const n=$('datoNombre').value.trim(),v=$('datoValor').value.trim(),u=$('datoUnidad').value.trim();if(!n||!v)return;state.datos.push({id:crypto.randomUUID(),nombre:n,valor:v,unidad:u,origen:$('datoOrigen').value,confirmado:true,fecha:new Date().toISOString()});['datoNombre','datoValor','datoUnidad'].forEach(x=>$(x).value='');render()}
+function render(){
+ $('evidenceList').innerHTML=state.evidencias.map(e=>'<div class="item"><b>'+e.descripcion+'</b> · '+e.tipo+'</div>').join('');
+ $('factorList').innerHTML=state.factores.map(f=>'<div class="item">'+badge(f.estado)+' '+f.descripcion+'</div>').join('');
+ $('dataList').innerHTML=state.datos.map(d=>'<div class="item">'+badge('CONFIRMADO POR PROFESIONAL')+' <b>'+d.nombre+'</b>: '+d.valor+' '+d.unidad+' <small>('+d.origen+')</small></div>').join('');
+ const ms=[...document.querySelectorAll('.metodo:checked')].map(x=>x.value);$('methodSummary').textContent=ms.length?'Seleccionados por el profesional: '+ms.join(', '):'Todavía no hay métodos seleccionados.';
+ $('summary').innerHTML='<p><b>Evidencias:</b> '+state.evidencias.length+' · <b>Factores:</b> '+state.factores.length+' · <b>Datos confirmados:</b> '+state.datos.length+'</p>';
+}
+document.querySelectorAll('.metodo').forEach(x=>x.addEventListener('change',render));
+function save(){state.caso=$('caso').value;state.tarea=$('tarea').value;state.contexto=$('contexto').value;localStorage.setItem('ergonomia_multimetodo_mvp',JSON.stringify(state));alert('Caso guardado en este navegador.')}
+function exportCase(){state.caso=$('caso').value;state.tarea=$('tarea').value;state.contexto=$('contexto').value;const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='caso-ergonomia.json';a.click();URL.revokeObjectURL(a.href)}
+(()=>{const x=localStorage.getItem('ergonomia_multimetodo_mvp');if(x)Object.assign(state,JSON.parse(x));$('caso').value=state.caso;$('tarea').value=state.tarea;$('contexto').value=state.contexto;render()})();
+</script>
+</body>
+</html>
