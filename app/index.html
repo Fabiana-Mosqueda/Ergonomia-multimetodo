@@ -132,13 +132,9 @@ function render(){
 function val(id){return Number($(id).value)}
 window.calculateRula=()=>{
  const entrada={
-  usLeft:val('rulaUSL'),usRight:val('rulaUSR'),
-  faLeft:val('rulaFAL'),faRight:val('rulaFAR'),
-  wristLeft:val('rulaWL'),wristRight:val('rulaWR'),
-  wristPosLeft:val('rulaWPL'),wristPosRight:val('rulaWPR'),
-  neck:val('rulaNeck'),trunk:val('rulaTrunk'),legs:val('rulaLegs'),
-  muscleA:val('rulaMuscleA'),muscleB:val('rulaMuscleB'),
-  forceA:val('rulaForceA'),forceB:val('rulaForceB')
+  izq:{ua:val('rulaUSL'),la:val('rulaFAL'),w:val('rulaWL'),wt:val('rulaWPL'),musc:val('rulaMuscleA'),force:val('rulaForceA')},
+  der:{ua:val('rulaUSR'),la:val('rulaFAR'),w:val('rulaWR'),wt:val('rulaWPR'),musc:val('rulaMuscleA'),force:val('rulaForceA')},
+  unico:{neck:val('rulaNeck'),trunk:val('rulaTrunk'),legs:val('rulaLegs'),musc:val('rulaMuscleB'),force:val('rulaForceB')}
  };
  try{
   const resultado=calcularRULA(entrada);
