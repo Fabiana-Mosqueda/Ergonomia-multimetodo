@@ -269,30 +269,36 @@ function addFactor(){const f=PROTOCOLO_886.find(x=>x.codigo===$('factor886').val
 function addDato(){const n=$('datoNombre').value.trim(),v=$('datoValor').value.trim(),u=$('datoUnidad').value.trim();if(!n||!v)return;state.datos.push({id:crypto.randomUUID(),nombre:n,valor:v,unidad:u,origen:$('datoOrigen').value,confirmado:true,fecha:new Date().toISOString()});['datoNombre','datoValor','datoUnidad'].forEach(x=>$(x).value='');render()}
 $('addEvidenceBtn').onclick=addEvidence;
 async function llamarGemini(key,body){
+  const modelos=['gemini-3.8-flash','gemini-3.7-flash','gemini-3.5-flash-lite'];
   let ultimo='';
-  for(let intento=0;intento<3;intento++){
-    const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),60000);
-    try{
-      const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','x-goog-api-key':key},
-        body:JSON.stringify(body),
-        signal:controller.signal
-      });
-      if(resp.ok)return resp;
-      const texto=await resp.text();
-      let detalle=texto;
-      try{const j=JSON.parse(texto);detalle=j.error?.message||texto}catch(_){}
-      ultimo='Gemini HTTP '+resp.status+': '+detalle;
-      if(![429,500,502,503,504].includes(resp.status)) throw new Error(ultimo);
-    }catch(err){
-      ultimo=err.name==='AbortError'?'Gemini tardó más de 60 segundos en responder.':(err.message||String(err));
-      if(intento===2)throw new Error(ultimo);
-    }finally{
-      clearTimeout(timer);
+  for(const modelo of modelos){
+    for(let intento=0;intento<2;intento++){
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),60000);
+      try{
+        const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+modelo+':generateContent',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','x-goog-api-key':key},
+          body:JSON.stringify(body),
+          signal:controller.signal
+        });
+        if(resp.ok)return resp;
+        const texto=await resp.text();
+        let detalle=texto;
+        try{const j=JSON.parse(texto);detalle=j.error?.message||texto}catch(_){}
+        ultimo='Gemini '+modelo+' HTTP '+resp.status+': '+detalle;
+        if(resp.status===503){
+          break;
+        }
+        if(![429,500,502,504].includes(resp.status)) throw new Error(ultimo);
+      }catch(err){
+        ultimo=err.name==='AbortError'?'Gemini tardó más de 60 segundos en responder.':(err.message||String(err));
+        if(![503,429,500,502,504].some(code=>ultimo.includes('HTTP '+code))) throw new Error(ultimo);
+      }finally{
+        clearTimeout(timer);
+      }
+      await new Promise(resolve=>setTimeout(resolve,1500*Math.pow(2,intento)));
     }
-    await new Promise(resolve=>setTimeout(resolve,1000*Math.pow(2,intento)));
   }
   throw new Error(ultimo||'No se pudo conectar con Gemini.');
 }
