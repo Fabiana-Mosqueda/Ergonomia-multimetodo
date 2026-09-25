@@ -52,6 +52,7 @@ small{color:#5d6975}
 <label>Clave Gemini para esta sesión</label>
 <input id="geminiKey" type="password" autocomplete="off" placeholder="Pegá tu clave aquí (no se guarda en GitHub)">
 <div class="row" style="margin-top:10px">
+<button id="testGeminiBtn" type="button" class="secondary">Probar conexión</button>
 <button id="analyzeAiBtn" type="button">Analizar evidencias con IA</button>
 </div>
 <div id="aiStatus" class="ai-status"></div>
@@ -267,6 +268,42 @@ async function addEvidence(){
 function addFactor(){const f=PROTOCOLO_886.find(x=>x.codigo===$('factor886').value);if(!f)return;state.factores.push({...f,id:crypto.randomUUID(),estado:$('factorState').value,fecha:new Date().toISOString()});render()}
 function addDato(){const n=$('datoNombre').value.trim(),v=$('datoValor').value.trim(),u=$('datoUnidad').value.trim();if(!n||!v)return;state.datos.push({id:crypto.randomUUID(),nombre:n,valor:v,unidad:u,origen:$('datoOrigen').value,confirmado:true,fecha:new Date().toISOString()});['datoNombre','datoValor','datoUnidad'].forEach(x=>$(x).value='');render()}
 $('addEvidenceBtn').onclick=addEvidence;
+async function llamarGemini(key,body){
+  let ultimo='';
+  for(let intento=0;intento<3;intento++){
+    try{
+      const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-goog-api-key':key},
+        body:JSON.stringify(body)
+      });
+      if(resp.ok)return resp;
+      const texto=await resp.text();
+      let detalle=texto;
+      try{const j=JSON.parse(texto);detalle=j.error?.message||texto}catch(_){}
+      ultimo='Gemini HTTP '+resp.status+': '+detalle;
+      if(![429,500,502,503,504].includes(resp.status)) throw new Error(ultimo);
+    }catch(err){
+      ultimo=err.message||String(err);
+      if(intento===2)throw new Error(ultimo);
+    }
+    await new Promise(resolve=>setTimeout(resolve,1000*Math.pow(2,intento)));
+  }
+  throw new Error(ultimo||'No se pudo conectar con Gemini.');
+}
+async function probarGemini(){
+ const key=$('geminiKey').value.trim();
+ if(!key){$('aiStatus').textContent='Falta la clave Gemini para probar la conexión.';return}
+ $('aiStatus').textContent='Probando conexión con Gemini…';
+ try{
+   const resp=await llamarGemini(key,{contents:[{parts:[{text:'Respondé únicamente: OK'}]}]});
+   const data=await resp.json();
+   const raw=data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('').trim()||'';
+   $('aiStatus').textContent=raw?'Conexión OK con Gemini.':'Gemini respondió, pero sin contenido de texto.';
+ }catch(err){
+   $('aiStatus').textContent='No se pudo conectar: '+err.message;
+ }
+}
 async function analizarConIA(){
  const key=$('geminiKey').value.trim();
  if(!key){$('aiStatus').textContent='Falta la clave Gemini para ejecutar el análisis.';return}
@@ -304,15 +341,10 @@ Respondé SOLO JSON con esta estructura:
  const contents=[{text:prompt}];
  imgs.forEach(x=>contents.push({inline_data:{mime_type:x.mime,data:x.dataUrl.split(',')[1]}}));
  try{
-   const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',{
-     method:'POST',
-     headers:{'Content-Type':'application/json','x-goog-api-key':key},
-     body:JSON.stringify({
-       contents:[{role:'user',parts:contents}],
-       generationConfig:{responseMimeType:'application/json'}
-     })
+   const resp=await llamarGemini(key,{
+     contents:[{role:'user',parts:contents}],
+     generationConfig:{responseMimeType:'application/json'}
    });
-   if(!resp.ok) throw new Error('Gemini respondió HTTP '+resp.status);
    const data=await resp.json();
    const raw=data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('')||'';
    const result=JSON.parse(raw);
@@ -327,6 +359,7 @@ Respondé SOLO JSON con esta estructura:
    $('aiStatus').textContent='No se pudo analizar: '+err.message;
  }
 }
+$('testGeminiBtn').onclick=probarGemini;
 $('analyzeAiBtn').onclick=analizarConIA;
 $('startAnalysisBtn').onclick=()=>{
  if(state.evidencias.length===0){alert('Primero cargá al menos una evidencia.');return}
