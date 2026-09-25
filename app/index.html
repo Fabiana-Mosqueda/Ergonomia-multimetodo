@@ -271,11 +271,14 @@ $('addEvidenceBtn').onclick=addEvidence;
 async function llamarGemini(key,body){
   let ultimo='';
   for(let intento=0;intento<3;intento++){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),60000);
     try{
       const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',{
         method:'POST',
         headers:{'Content-Type':'application/json','x-goog-api-key':key},
-        body:JSON.stringify(body)
+        body:JSON.stringify(body),
+        signal:controller.signal
       });
       if(resp.ok)return resp;
       const texto=await resp.text();
@@ -284,12 +287,34 @@ async function llamarGemini(key,body){
       ultimo='Gemini HTTP '+resp.status+': '+detalle;
       if(![429,500,502,503,504].includes(resp.status)) throw new Error(ultimo);
     }catch(err){
-      ultimo=err.message||String(err);
+      ultimo=err.name==='AbortError'?'Gemini tardó más de 60 segundos en responder.':(err.message||String(err));
       if(intento===2)throw new Error(ultimo);
+    }finally{
+      clearTimeout(timer);
     }
     await new Promise(resolve=>setTimeout(resolve,1000*Math.pow(2,intento)));
   }
   throw new Error(ultimo||'No se pudo conectar con Gemini.');
+}
+async function prepararImagenAI(item){
+  const dataUrl=item.dataUrl;
+  const mime=item.mime||'';
+  if(!/^image\/(jpeg|jpg|png|webp)$/.test(mime)){
+    throw new Error('Formato de imagen no compatible para IA: '+mime+'. Usá JPG, PNG o WebP.');
+  }
+  const img=new Image();
+  img.src=dataUrl;
+  await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('No se pudo preparar una de las imágenes. Guardala como JPG o PNG e intentá de nuevo.'));});
+  const max=1600;
+  const escala=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+  const w=Math.max(1,Math.round(img.naturalWidth*escala));
+  const h=Math.max(1,Math.round(img.naturalHeight*escala));
+  const canvas=document.createElement('canvas');
+  canvas.width=w;canvas.height=h;
+  const ctx=canvas.getContext('2d');
+  ctx.drawImage(img,0,0,w,h);
+  const comprimida=canvas.toDataURL('image/jpeg',0.78);
+  return {mime:'image/jpeg',dataUrl:comprimida};
 }
 async function probarGemini(){
  const key=$('geminiKey').value.trim();
@@ -307,9 +332,17 @@ async function probarGemini(){
 async function analizarConIA(){
  const key=$('geminiKey').value.trim();
  if(!key){$('aiStatus').textContent='Falta la clave Gemini para ejecutar el análisis.';return}
- const imgs=state.evidencias.map(e=>aiImageCache.get(e.id)).filter(Boolean).slice(0,12);
+ const imgs=state.evidencias.map(e=>aiImageCache.get(e.id)).filter(Boolean).slice(0,6);
  if(!imgs.length){$('aiStatus').textContent='No hay imágenes disponibles para analizar en esta sesión.';return}
- $('aiStatus').textContent='Analizando '+imgs.length+' evidencia(s)…';
+ $('aiStatus').textContent='Preparando '+imgs.length+' evidencia(s) para IA…';
+ let imgsPreparadas;
+ try{
+   imgsPreparadas=await Promise.all(imgs.map(prepararImagenAI));
+ }catch(err){
+   $('aiStatus').textContent='No se pudo preparar la evidencia: '+err.message;
+   return;
+ }
+ $('aiStatus').textContent='Enviando '+imgsPreparadas.length+' evidencia(s) a Gemini…';
  const prompt=`
 Sos un asistente de análisis ergonómico visual. Analizá las imágenes como EVIDENCIA, no como medición.
 Caso: ${state.caso||'sin nombre'}
@@ -339,11 +372,15 @@ Respondé SOLO JSON con esta estructura:
 }
 `;
  const contents=[{text:prompt}];
- imgs.forEach(x=>contents.push({inline_data:{mime_type:x.mime,data:x.dataUrl.split(',')[1]}}));
+ imgsPreparadas.forEach(x=>contents.push({inline_data:{mime_type:x.mime,data:x.dataUrl.split(',')[1]}}));
  try{
    const resp=await llamarGemini(key,{
      contents:[{role:'user',parts:contents}],
-     generationConfig:{responseMimeType:'application/json'}
+     generationConfig:{
+       responseMimeType:'application/json',
+       maxOutputTokens:2000,
+       thinkingConfig:{thinkingLevel:'low'}
+     }
    });
    const data=await resp.json();
    const raw=data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('')||'';
